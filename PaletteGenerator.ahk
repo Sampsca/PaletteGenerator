@@ -15,19 +15,23 @@ SetWorkingDir %A_ScriptDir%  ; Ensures a consistent starting directory.
 PS_Author:="Sam."
 PS_Copyright:="Copyright (c) 2017 Sam Schmitz"
 
+;;; Enable Drag&Drop ;;;
+DllCall( "ChangeWindowMessageFilter", uInt, "0x" 49, uint, 1)
+DllCall( "ChangeWindowMessageFilter", uInt, "0x" 233, uint, 1)
+
 Global PaletteLookUp ; MPALETTE.BMP
 	PaletteLookUp:={}
 Global Palette
 	Palette:={}
 Global Gradient1, Gradient2, Gradient3, Gradient4, Gradient5, Gradient6, Gradient7 ; Set all selected palettes to 0
 	Gradient1:=Gradient2:=Gradient3:=Gradient4:=Gradient5:=Gradient6:=Gradient7:=0
-Global GradientImages, PaletteImage, TestImage, TestImageRaw
-	GradientImages:={}, PaletteImage:={}, TestImage:={}, TestImageRaw:=""
+Global GradientImages, PaletteImage, TestImage, TestImageRaw, TestImageBytes
+	GradientImages:={}, PaletteImage:={}, TestImage:={}, TestImageRaw:="", TestImageBytes:=0
 Global pToken
 	pToken:=LocalGDIPlus_StartUp()
-Global GradientComboBoxOptions, TestImageComboBoxOptions, TestImageCombo, Zoom, CheckBox1, DropDownList1, DropDownList2, MPALETTEDropDownListOptions
-	Zoom:=0
-Global Pic1, Pic2, Pic3, Pic4, Pic5, Pic6, Pic7, Pic8, Pic9
+Global GradientComboBoxOptions, TestImageComboBoxOptions, TestImageCombo, Zoom, CheckBox1, DropDownList1, DropDownList2, MPALETTEDropDownListOptions, Text1, Slider1
+	Zoom:=100
+Global Pic1, Pic2, Pic3, Pic4, Pic5, Pic6, Pic7, Pic8, Pic9, Pic9Width, Pic9Height
 Global OldMPALETTE
 	OldMPALETTE:=""
 
@@ -48,12 +52,18 @@ try {
 		TestImageBytes:=LoadTestImage(A_LoopFileLongPath,TestImageRaw)
 		Break
 		}
-	GenerateTestImage(TestImageRaw,TestImageBytes)
+	GenerateTestImage(TestImageRaw, TestImageBytes)
 	LoadGUIMain()
+	GenerateHotkeys()
 	Return
 } catch e {
 	ThrowMsg(16,"Error!","Exception thrown!`n`nWhat	=	" e.what "`nFile	=	" e.file "`nLine	=	" e.line "`nMessage	=	" e.message "`nExtra	=	" e.extra)
 	}
+
+GuiDropFiles(GuiHwnd, FileArray, CtrlHwnd, X, Y) {
+    for i, file in FileArray
+        ImportPalette(file)
+}
 
 OnExit:
 GuiClose:
@@ -73,6 +83,7 @@ LoadGUIMain(){
 
    Gui, Color, 202028, 101020
    Gui, Font, c646481
+   Gui, +HwndhGui1
 
    Gui, Font, bold
 
@@ -124,13 +135,17 @@ LoadGUIMain(){
    Gui, Add, DropDownList, vDropDownList1 Choose6 AltSubmit yp x+30, Adobe ACT|All|Bitmap|Raw/BIN|Visual Bitmap|Windows PAL
    Gui, Add, Button, gExport yp x+m, Export
    Gui, Add, Text, yp-20 xp-130, Export Palette As:
+   Gui, Add, Button, gExportBitmap xm+20 y+60, Export Repaletted Bitmap
+   Gui, Add, Button, gImportPalette xm+20, Import Palette
    
    Gui, Add, Text, ym Section, Select MPALETTE.bmp:
    Gui, Add, DropDownList, vDropDownList2 gUpdateGUIMain Choose1, %MPALETTEDropDownListOptions%
    Gui, Add, Picture, vPic8 y+20, % "hBitmap:" PaletteImage[1]
    Gui, Add, ComboBox, % "w150 vTestImageCombo gUpdateGUIMain Choose" 1, %TestImageComboBoxOptions%
-   Gui, Add, CheckBox, vCheckBox1 gUpdateGUIMain x+20 yp+5, Zoom
-   Gui, Add, Picture, vPic9 xs w-1 h%Zoom%, % "hBitmap:" TestImage[1]
+   ;Gui, Add, CheckBox, vCheckBox1 gUpdateGUIMain x+20 yp+5, Zoom
+   Gui, Add, Text, vText1 xp+220 yp-20, Zoom:
+   Gui, Add, Slider, Buddy1Text1 vSlider1 gUpdateGUIMain Range5-500 ToolTip NoTicks AltSubmit, %Zoom%
+   Gui, Add, Picture, vPic9 xs, % "hBitmap:" TestImage[1] ;w-1 h%Pic9Height%
    
    Gui, +Resize
    Gui, Show, Autosize Center, Palette Mixer
@@ -165,14 +180,22 @@ UpdateGUIMain(){
 	GeneratePalette()
 	GuiControl,,Pic8, % "hBitmap:" PaletteImage[1]
 	IfExist, % A_ScriptDir "\res\paperdolls\" TestImageCombo ".bmp"
-		GenerateTestImage(TestImageRaw,LoadTestImage(A_ScriptDir "\res\paperdolls\" TestImageCombo ".bmp",TestImageRaw))
+		GenerateTestImage(TestImageRaw,TestImageBytes:=LoadTestImage(A_ScriptDir "\res\paperdolls\" TestImageCombo ".bmp",TestImageRaw))
 	Else
-		GenerateTestImage(TestImageRaw)
-	If (CheckBox1=1)
-		Zoom:=250
-	Else
-		Zoom:=0
+		GenerateTestImage(TestImageRaw,TestImageBytes)
+	;~ If (CheckBox1=1)
+		;~ Zoom:=250
+	;~ Else
+		;~ Zoom:=0
+	Zoom:=Pic9Height*Slider1//100
+	;MsgBox %Pic9Height%`n%Slider1%`n%Zoom%
 	GuiControl,,Pic9, % "*w-1 *h" Zoom " hBitmap:" TestImage[1]
+}
+
+GenerateHotkeys(){
+	Global
+	Hotkey, IfWinActive, ahk_id %hGui1%
+	Hotkey, F5, UpdateGUIMain
 }
 
 RandomColors(){
@@ -205,6 +228,25 @@ Export(){
 		ExportPalette(Type,Path)
 }
 
+ExportBitmap(){
+	Gui, Submit, NoHide
+	Gui +OwnDialogs
+		FileSelectFile, Path, S2, , Select the path and filename for the exported repaletted bitmap., Bitmap (*.bmp)
+	If (Path<>"")
+		{
+		SplitPath, Path, , , OutExtension
+		If (OutExtension<>"bmp")
+			Path.=".bmp"
+		ExportBitmapBIN(TestImageRaw,Path)
+		}
+}
+
+ExportBitmapBIN(ByRef TestImageRaw,Path:=""){
+	file0:=FileOpen(Path,"w-d")
+		file0.RawWrite(TestImageRaw,TestImageBytes)
+	file0.Close()
+}
+
 LoadPaletteLookUp(){
 	;;;;; Load PaletteLookUp from Palette_Sequences.txt ;;;;;
 	FileRead, Data, %A_ScriptDir%\Palette_Sequences.txt
@@ -221,6 +263,7 @@ LoadPaletteLookUp(){
 		Else
 			{
 			PaletteLookUp[GradientNum,Entry,Triplet]:=A_LoopField
+			PaletteLookUp[GradientNum,Entry,"AA"]:=0
 			If (Triplet="RR")
 				Triplet:="GG"
 			Else If (Triplet="GG")
@@ -230,6 +273,7 @@ LoadPaletteLookUp(){
 				Triplet:="RR"
 				Entry+=1
 				}
+				
 			}
 		}
 	GradientComboBoxOptions:=""
@@ -300,6 +344,7 @@ LoadPaletteLookUpBMP(MPALETTE){
 						PaletteLookUp[GradientNum,A_Index,"BB"]:=file1.ReadUChar()
 						PaletteLookUp[GradientNum,A_Index,"GG"]:=file1.ReadUChar()
 						PaletteLookUp[GradientNum,A_Index,"RR"]:=file1.ReadUChar()
+						PaletteLookUp[GradientNum,A_Index,"AA"]:=0
 						}
 					}
 				}
@@ -377,7 +422,7 @@ GeneratePalette(){
 	Palette[Entry,"AA"]:=0
 	Entry+=1
 	Gradient+=1
-	Loop, 7 ; First 7 Gradients are not mixed and span 12 palette entries each
+	Loop, 7 ; Next 7 Gradients are not mixed and span 12 palette entries each
 		{
 		Loop, 12
 			{
@@ -416,6 +461,9 @@ LoadTestImage(InPath,ByRef TestImageRaw){
 	file:=FileOpen(InPath,"r-d")
 		file.RawRead(TestImageRaw,file.Length)
 		Bytes:=file.Length
+		file.seek(18,0)
+		Pic9Width:=file.ReadInt()
+		Pic9Height:=file.ReadInt()
 	file.Close()
 	Return Bytes
 }
@@ -438,11 +486,8 @@ GenerateMPALETTEDropDownListOptions(){
 		}
 }
 
-GenerateTestImage(ByRef TestImageRaw, TestImageBytes:=""){
-	Static Bytes
-	If (TestImageBytes<>"") AND (TestImageBytes>0)
-		Bytes:=TestImageBytes
-	TestImageBIN:=New MemoryFileIO(TestImageRaw,Bytes)
+GenerateTestImage(ByRef TestImageRaw, TestImageBytes){
+	TestImageBIN:=New MemoryFileIO(TestImageRaw,TestImageBytes)
 	TestImageBIN.Seek(54,0)
 	Loop, % (Palette.MaxIndex()-Palette.MinIndex()+1)
 		{
@@ -458,7 +503,7 @@ GenerateTestImage(ByRef TestImageRaw, TestImageBytes:=""){
 		TestImageBIN.WriteUChar(0)
 		Offset++
 		}
-	TestImage[1]:=GDIPlus_hBitmapFromBuffer(TestImageRaw,Bytes)
+	TestImage[1]:=GDIPlus_hBitmapFromBuffer(TestImageRaw,TestImageBytes)
 	TestImageBIN:=""
 }
 
@@ -651,6 +696,166 @@ ExportPalette(Type,OutPath){
 		file.Close()
 		PaletteBIN:=""
 		}
+}
+
+ImportPalette(path:=""){
+	; Adobe ACT|All|Bitmap|Raw/BIN|Visual Bitmap|Windows Palette
+	; ACT|BMP|BIN|PAL
+	
+	IfNotExist, %path%
+		{
+		Gui +OwnDialogs
+			FileSelectFile, Path, 3, , Select the path and filename of the palette to load.
+		}
+	If FileExist(Path)
+		{
+		file0:=FileOpen(Path,"r-d")
+			file0.RawRead(FileBin,FileSize:=file0.Length)
+		file0.Close()
+		SplitPath, Path, , , FileType
+		PaletteBIN:=New MemoryFileIO(FileBin,FileSize)
+		PaletteBIN.Seek(0,0)
+		If (FileType="ACT")
+			{
+			Entry:=1
+			Loop, % (FileSize//3>256?256:FileSize//3)
+				{
+				;~ Gradient:=0
+				Palette[Entry,"RR"]:=PaletteBIN.ReadUChar()
+				Palette[Entry,"GG"]:=PaletteBIN.ReadUChar()
+				Palette[Entry,"BB"]:=PaletteBIN.ReadUChar()
+				Palette[Entry,"AA"]:=0
+				Entry+=1
+				}
+			If (Entry<=256)
+				{
+				Palette[Entry,"RR"]:=0
+				Palette[Entry,"GG"]:=0
+				Palette[Entry,"BB"]:=0
+				Palette[Entry,"AA"]:=0
+				Entry+=1
+				}
+			}
+		Else If (FileType="BMP")
+			{
+			FileType:=PaletteBIN.Read(2)
+			PaletteBIN.Seek(10,0)
+			BitmapOffset:=PaletteBIN.ReadUInt()
+			Size:=PaletteBIN.ReadUInt()
+			PaletteBIN.Seek(28,0)
+			BitsPerPixel:=PaletteBIN.ReadShort()
+			PaletteBIN.Seek(30,0)
+			Compression:=PaletteBIN.ReadUInt()
+			If (FileType="BM") AND (BitsPerPixel=8) AND (Compression=0)
+				{
+				PaletteBIN.Seek(Size+14,0)
+				PaletteEntries:=(BitmapOffset-Size-14)//4
+				Loop, % PaletteEntries
+					{
+					Index:=A_Index
+					Palette[Index,"BB"]:=PaletteBIN.ReadUChar()
+					Palette[Index,"GG"]:=PaletteBIN.ReadUChar()
+					Palette[Index,"RR"]:=PaletteBIN.ReadUChar()
+					Palette[Index,"AA"]:=PaletteBIN.ReadUChar()
+					}
+				If (Index<256)
+					{
+					Palette[Index,"BB"]:=0
+					Palette[Index,"GG"]:=0
+					Palette[Index,"RR"]:=0
+					Palette[Index,"AA"]:=0
+					Index++
+					}
+				}
+			Else
+				throw { what: (IsFunc(A_ThisFunc)?"function: " A_ThisFunc "()":"") A_Tab (IsLabel(A_ThisLabel)?"label: " A_ThisLabel:""), file: A_LineFile, line: A_LineNumber, message: "ErrorLevel=" ErrorLevel A_Tab "A_LastError=" A_LastError, extra: Path " is not a valid 8-bit uncompressed Microsoft Windows 3.x Bitmap."}
+			}
+		Else If (FileType="BIN")
+			{
+			Loop, % (FileSize//4>256?256:FileSize//4)
+				{
+				Index:=A_Index
+				Palette[Index,"RR"]:=PaletteBIN.ReadUChar()
+				Palette[Index,"GG"]:=PaletteBIN.ReadUChar()
+				Palette[Index,"BB"]:=PaletteBIN.ReadUChar()
+				Palette[Index,"AA"]:=PaletteBIN.ReadUChar()
+				}
+			If (Index<256)
+				{
+				Palette[Index,"BB"]:=0
+				Palette[Index,"GG"]:=0
+				Palette[Index,"RR"]:=0
+				Palette[Index,"AA"]:=0
+				Index++
+				}
+			}
+		Else If (FileType="PAL")
+			{
+			ID0:=PaletteBIN.Read(4)				; "RIFF"
+			Size0:=PaletteBIN.ReadDWORD()		; 1040
+			FormType:=PaletteBIN.Read(4)		; "PAL"
+			ID1:=PaletteBIN.Read(4)				; "data"
+			Size1:=PaletteBIN.ReadDWORD()		; 1028
+			palVersion:=PaletteBIN.ReadWORD()	; 768
+			palPalEntry:=PaletteBIN.ReadWORD()	; 256
+			If (ID0="RIFF") AND (FormType="PAL ") AND (ID1="data")
+				{
+				Loop, % (palPalEntry>256?256:palPalEntry)
+					{
+					Index:=A_Index
+					Palette[Index,"RR"]:=PaletteBIN.ReadUChar()
+					Palette[Index,"GG"]:=PaletteBIN.ReadUChar()
+					Palette[Index,"BB"]:=PaletteBIN.ReadUChar()
+					Palette[Index,"AA"]:=PaletteBIN.ReadUChar()
+					}
+				If (Index<256)
+					{
+					Palette[Index,"RR"]:=0
+					Palette[Index,"GG"]:=0
+					Palette[Index,"BB"]:=0
+					Palette[Index,"AA"]:=0
+					Index++
+					}
+				}
+			Else
+				throw { what: (IsFunc(A_ThisFunc)?"function: " A_ThisFunc "()":"") A_Tab (IsLabel(A_ThisLabel)?"label: " A_ThisLabel:""), file: A_LineFile, line: A_LineNumber, message: "ErrorLevel=" ErrorLevel A_Tab "A_LastError=" A_LastError, extra: Path " is not a valid Windows PAL file."}
+			}
+		}
+	;~ GeneratePaletteImage()
+	;~ GuiControl,,Pic8, % "hBitmap:" PaletteImage[1]	; take these two lines out before release
+	GuessNewPaletteGradients()
+}
+
+GuessNewPaletteGradients(){
+	PaletteEntry:=5 ; Major index into Palette - 0th Gradient spans the first 4 palette entries which are for reserved colors
+	Loop, 7 ; Next 7 Gradients are not mixed and span 12 palette entries each
+		{
+		GradientIdx:=A_Index ; Current graphical color gradient (1-7)
+		BestEuclideanDist:=1000000000000
+		Loop, % (PaletteLookUp.MaxIndex()-PaletteLookUp.MinIndex()+1) ; For each gradient in PaletteLookUp
+			{
+			PaleteLookUpIdx:=PaletteLookUp.MinIndex()+A_Index-1 ; Major index into PaletteLookUp
+			EuclideanDist:=0
+			Loop, 12
+				{
+				CurrPaletteEntry:=PaletteEntry+A_Index-1
+				EuclideanDist+=Sqrt((Palette[CurrPaletteEntry,"RR"]-PaletteLookUp[PaleteLookUpIdx,A_Index,"RR"])**2+(Palette[CurrPaletteEntry,"GG"]-PaletteLookUp[PaleteLookUpIdx,A_Index,"GG"])**2+(Palette[CurrPaletteEntry,"BB"]-PaletteLookUp[PaleteLookUpIdx,A_Index,"BB"])**2+(Palette[CurrPaletteEntry,"AA"]-PaletteLookUp[PaleteLookUpIdx,A_Index,"AA"])**2)
+				}
+			If (EuclideanDist<BestEuclideanDist)
+				{
+				BestEuclideanDist:=EuclideanDist
+				Grad%GradientIdx%:=PaleteLookUpIdx
+				}
+			}
+		PaletteEntry+=12
+		}
+	;MsgBox % Grad1 "`n" Grad2 "`n" Grad3 "`n" Grad4 "`n" Grad5 "`n" Grad6 "`n" Grad7
+	Loop, 7
+		{
+		PaleteLookUpIdx:=Grad%A_Index%
+		GuiControl, Choose, Gradient%A_Index%, % PaleteLookUpIdx + 1
+		}
+	UpdateGUIMain()
 }
 
 LocalGDIPlus_StartUp(){

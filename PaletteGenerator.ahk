@@ -1,5 +1,5 @@
 ﻿;
-; AutoHotkey Version: 1.1.26.01
+; AutoHotkey Version: 1.1.27.07
 ; Language:       English
 ; Platform:       Optimized for Windows 10
 ; Author:         Sam.
@@ -30,7 +30,7 @@ Global GradientImages, PaletteImage, TestImage, TestImageRaw, TestImageBytes
 Global pToken
 	pToken:=LocalGDIPlus_StartUp()
 Global GradientComboBoxOptions, TestImageComboBoxOptions, TestImageCombo, Zoom, CheckBox1, DropDownList1, DropDownList2, MPALETTEDropDownListOptions, Text1, Slider1
-	Zoom:=100
+	Zoom:=1
 Global Pic1, Pic2, Pic3, Pic4, Pic5, Pic6, Pic7, Pic8, Pic9, Pic9Width, Pic9Height
 Global OldMPALETTE
 	OldMPALETTE:=""
@@ -144,7 +144,7 @@ LoadGUIMain(){
    Gui, Add, ComboBox, % "w150 vTestImageCombo gUpdateGUIMain Choose" 1, %TestImageComboBoxOptions%
    ;Gui, Add, CheckBox, vCheckBox1 gUpdateGUIMain x+20 yp+5, Zoom
    Gui, Add, Text, vText1 xp+220 yp-20, Zoom:
-   Gui, Add, Slider, Buddy1Text1 vSlider1 gUpdateGUIMain Range5-500 ToolTip NoTicks AltSubmit, %Zoom%
+   Gui, Add, Slider, Buddy1Text1 vSlider1 gUpdateGUIMain Range-8-8 ToolTip NoTicks AltSubmit, %Zoom%
    Gui, Add, Picture, vPic9 xs, % "hBitmap:" TestImage[1] ;w-1 h%Pic9Height%
    
    Gui, +Resize
@@ -187,7 +187,8 @@ UpdateGUIMain(){
 		;~ Zoom:=250
 	;~ Else
 		;~ Zoom:=0
-	Zoom:=Pic9Height*Slider1//100
+	;Zoom:=Pic9Height*Slider1//100
+	Zoom:=Floor(Pic9Height*(Slider1<0?1/Abs(Slider1):Slider1))
 	;MsgBox %Pic9Height%`n%Slider1%`n%Zoom%
 	GuiControl,,Pic9, % "*w-1 *h" Zoom " hBitmap:" TestImage[1]
 }

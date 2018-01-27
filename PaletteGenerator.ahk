@@ -1,5 +1,5 @@
 ﻿;
-; AutoHotkey Version: 1.1.27.07
+; AutoHotkey Version: 1.1.27.06
 ; Language:       English
 ; Platform:       Optimized for Windows 10
 ; Author:         Sam.
@@ -13,7 +13,7 @@ SetWorkingDir %A_ScriptDir%  ; Ensures a consistent starting directory.
 #NoTrayIcon
 
 PS_Author:="Sam."
-PS_Copyright:="Copyright (c) 2017 Sam Schmitz"
+PS_Copyright:="Copyright (c) 2017-2018 Sam Schmitz"
 
 ;;; Enable Drag&Drop ;;;
 DllCall( "ChangeWindowMessageFilter", uInt, "0x" 49, uint, 1)
@@ -144,7 +144,7 @@ LoadGUIMain(){
    Gui, Add, ComboBox, % "w150 vTestImageCombo gUpdateGUIMain Choose" 1, %TestImageComboBoxOptions%
    ;Gui, Add, CheckBox, vCheckBox1 gUpdateGUIMain x+20 yp+5, Zoom
    Gui, Add, Text, vText1 xp+220 yp-20, Zoom:
-   Gui, Add, Slider, Buddy1Text1 vSlider1 gUpdateGUIMain Range-8-8 ToolTip NoTicks AltSubmit, %Zoom%
+   Gui, Add, Slider, Buddy1Text1 vSlider1 gUpdateGUIMain Range-6-8 NoTicks AltSubmit, %Zoom%
    Gui, Add, Picture, vPic9 xs, % "hBitmap:" TestImage[1] ;w-1 h%Pic9Height%
    
    Gui, +Resize
@@ -188,7 +188,7 @@ UpdateGUIMain(){
 	;~ Else
 		;~ Zoom:=0
 	;Zoom:=Pic9Height*Slider1//100
-	Zoom:=Floor(Pic9Height*(Slider1<0?1/Abs(Slider1):Slider1))
+	Zoom:=Floor(Pic9Height*(Slider1<1?1/Abs(Slider1-2):Slider1))
 	;MsgBox %Pic9Height%`n%Slider1%`n%Zoom%
 	GuiControl,,Pic9, % "*w-1 *h" Zoom " hBitmap:" TestImage[1]
 }
